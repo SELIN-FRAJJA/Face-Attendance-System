@@ -1,1 +1,217 @@
 
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Attendance and Wage Calculator</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            display: flex;
+            justify-content: center; 
+            align-items: center;      
+            background-image: url("https://t3.ftcdn.net/jpg/04/36/93/58/360_F_436935867_bFgV6XSbklEyrOlwvps8WNo1SerlSnuu.jpg");
+            background-size: cover;   
+            background-position: center;  
+        }
+        
+        .container {
+            background: rgba(255, 255, 255, 0.8); 
+            border-radius: 15px;
+            padding: 30px;
+            width: 350px; 
+            text-align: center;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            height: 80vh; 
+            overflow-y: auto; 
+        }                            
+
+        h1 {
+            color: #004d00; 
+            margin-bottom: 20px;
+        }
+        
+        label {
+            color: #004d00; 
+            font-weight: bold;
+        }
+        
+        input[type="text"],
+        input[type="date"] {
+            width: 80%; 
+            padding: 8px;
+            margin: 10px 0;
+            border-radius: 5px;
+            border: 1px solid #004d00; 
+        }
+        
+        button {
+            background-color: #004d00; 
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-top: 20px;
+        }
+        
+        button:hover {
+            background-color: #006600; 
+        }
+        
+        #employeeImage {
+            width: 150px;
+            height: 150px;
+            object-fit: cover;
+            margin-top: 20px;
+            margin-bottom: 20px; 
+            border-radius: 50%; 
+            border: 2px solid #004d00;
+            display: block;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        
+        .result {
+            margin-top: 30px; 
+            font-size: 20px; 
+            color: #004d00; 
+        }
+       
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script> <!-- Include Chart.js -->
+</head>
+<body>
+
+<div class="container">
+    <h1>Attendance and Wage Calculator</h1>
+    
+    <form id="attendanceForm">
+        <label for="name">Enter Name:</label>
+        <input type="text" id="name" placeholder="Enter Name..." oninput="fetchImage()"><br>
+
+        <img id="employeeImage" src="" alt="Employee Photo" style="display: none;">
+
+        <label for="start-date">Start Date:</label>
+        <input type="date" id="start-date" name="start-date" required><br>
+
+        <label for="end-date">End Date:</label>
+        <input type="date" id="end-date" name="end-date" required><br>
+
+        <button type="submit">Calculate Wages</button><br>
+    </form>
+
+    <div id="total-wages" class="result"></div>
+    
+    <canvas id="attendanceChart" style="display: none; margin-top: 30px;"></canvas> <!-- Canvas for the chart -->
+</div>
+
+<script>
+    // Fetch image when the name is typed
+    function fetchImage() {
+        const name = document.getElementById('name').value.toLowerCase(); // Convert to lowercase for filename match
+        const employeeImage = document.getElementById('employeeImage');
+
+        if (name) {
+            // Set the image src dynamically
+            employeeImage.src = `/static/images/${name}.jpg`;
+
+            // Show the image
+            employeeImage.style.display = 'block';
+        } else {
+            // Hide the image if no name is entered
+            employeeImage.style.display = 'none';
+        }
+    }
+
+    document.getElementById('attendanceForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const name = document.getElementById('name').value;
+        const startDate = document.getElementById('start-date').value;
+        const endDate = document.getElementById('end-date').value;
+
+        // Calculate wages
+        const response = await fetch('/calculate_wage', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ name, startDate, endDate }),
+        });
+
+        const result = await response.json();
+        const wageDiv = document.getElementById('total-wages');
+
+        if (result.success) {
+            wageDiv.textContent = `Total Wages: ₹${result.total_wages} for ${result.total_days} days`;
+            // Fetch attendance data for the chart
+            fetchAttendanceData(name, startDate, endDate);
+        } else {
+            wageDiv.textContent = result.message;
+        }
+    });
+
+    async function fetchAttendanceData(name, startDate, endDate) {
+        const response = await fetch('/get_attendance_data', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ name, startDate, endDate }),
+        });
+
+        const attendanceResult = await response.json();
+        if (attendanceResult.success) {
+            const labels = attendanceResult.dates;
+            const attendanceCounts = attendanceResult.attendanceCounts;
+            displayAttendanceChart(labels, attendanceCounts);
+        } else {
+            console.error(attendanceResult.message);
+        }
+    }
+
+    function displayAttendanceChart(labels, data) {
+        const ctx = document.getElementById('attendanceChart').getContext('2d');
+        const attendanceChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Attendance Level',
+                    data: data,
+                    backgroundColor: 'rgba(0, 77, 0, 0.5)', // Green color
+                    borderColor: 'rgba(0, 77, 0, 1)', // Dark green border
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Attendance Count'
+                        }
+                    },
+                    x: {
+                        title: {
+                            display: true,
+                            text: 'Dates'
+                        }
+                    }
+                }
+            }
+        });
+
+        // Show the chart
+        document.getElementById('attendanceChart').style.display = 'block';
+    }
+</script>
+
+</body>
+</html>
